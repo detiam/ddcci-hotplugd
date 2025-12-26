@@ -304,7 +304,8 @@ static int setup_udev(struct udev **udev,
     return udev_monitor_get_fd(*mon);
 }
 
-static void handle_udev_event(struct udev_monitor *mon) {
+static void handle_udev_event(void* arg) {
+    struct udev_monitor *mon = (struct udev_monitor *)arg;
     struct udev_device *dev =
         udev_monitor_receive_device(mon);
     if (!dev)
@@ -340,7 +341,8 @@ static Display *setup_xrandr(int *xfd) {
     return dpy;
 }
 
-static void handle_x_events(Display *dpy) {
+static void handle_x_events(void* arg) {
+    Display *dpy = (Display *)arg;
     while (XPending(dpy)) {
         XEvent ev;
         XNextEvent(dpy, &ev);
@@ -362,6 +364,8 @@ static void handle_x_events(Display *dpy) {
 /* ------------------------------------------------------------ */
 /* main */
 
+typedef void (*UniversalFunc)(void*);
+
 int main(void) {
     const char *env_val = getenv("DDCCI_HOTPLUGD_LOG");
     if (env_val != NULL && strcmp(env_val, "0") == 0) {
@@ -374,29 +378,36 @@ int main(void) {
 
     run_ddcci_attach();   /* initial */
 
-    struct udev *udev = NULL;
-    struct udev_monitor *mon = NULL;
-    int udev_fd = setup_udev(&udev, &mon); // untested
+    struct pollfd fds[1];
+    UniversalFunc events_handle = NULL;
+    void* data = NULL;
 
     int xfd = -1;
     Display *dpy = setup_xrandr(&xfd);
-    if (xfd == -1)
-        msg("xrandr unavailable, only udev monitoring active.\n");
+    if (xfd >= 0 && dpy) {
+        msg("Using XRandR for hotplug detection\n");
+        fds[0].fd = xfd;
+        events_handle = handle_x_events;
+        data = dpy;
+        goto loop;
+    }
 
+    struct udev *udev = NULL;
+    struct udev_monitor *mon = NULL;
+    int udev_fd = setup_udev(&udev, &mon); // untested
+    if (udev_fd >= 0 && mon) {
+        msg("Using udev for hotplug detection\n");
+        fds[0].fd = udev_fd;
+        events_handle = handle_udev_event;
+        data = mon;
+        goto loop;
+    }
 
-    struct pollfd fds[2];
-    fds[0].fd = udev_fd;
+loop:
     fds[0].events = POLLIN;
-    fds[1].fd = xfd;
-    fds[1].events = POLLIN;
-
     for (;;) {
-        poll(fds, 2, -1);
-
+        poll(fds, 1, -1);
         if (fds[0].revents & POLLIN)
-            handle_udev_event(mon); // untested
-
-        if (xfd >= 0 && (fds[1].revents & POLLIN))
-            handle_x_events(dpy);
+            events_handle(data);
     }
 }
