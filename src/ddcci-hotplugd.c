@@ -344,6 +344,10 @@ static Display *setup_xrandr(int *xfd) {
                 setenv("DISPLAY", envs[0].display, 1);
                 setenv("XAUTHORITY", envs[0].xauthority, 1);
                 dpy = XOpenDisplay(NULL);
+                if (!dpy)
+                    return NULL;
+            } else {
+                return NULL;
             }
         } else {
             return NULL;
