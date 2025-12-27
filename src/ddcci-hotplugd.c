@@ -26,6 +26,9 @@
 /* ddcutil */
 #include <ddcutil_c_api.h>
 
+/* x11 finder */
+#include "x11_finder.h"
+
 static bool log_enabled = true;
 
 /* ------------------------------------------------------------ */
@@ -325,8 +328,21 @@ static int rr_event_base = -1;
 
 static Display *setup_xrandr(int *xfd) {
     Display *dpy = XOpenDisplay(NULL);
-    if (!dpy)
-        return NULL;
+    if (!dpy) {
+        if (geteuid() == 0) {
+            X11Env envs[1];
+            int found = fetch_x11_environments(envs, 1);
+            if (found > 0) {
+                msg("XRandR DISPLAY='%s' XAUTHORITY='%s'\n",
+                    envs[0].display, envs[0].xauthority);
+                setenv("DISPLAY", envs[0].display, 1);
+                setenv("XAUTHORITY", envs[0].xauthority, 1);
+                dpy = XOpenDisplay(NULL);
+            }
+        } else {
+            return NULL;
+        }
+    }
 
     int err;
     if (!XRRQueryExtension(dpy, &rr_event_base, &err))
