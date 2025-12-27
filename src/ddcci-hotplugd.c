@@ -48,8 +48,12 @@ static void write_string(const char *path, const char *s) {
     int fd = open(path, O_WRONLY | O_CLOEXEC);
     if (fd < 0)
         return;
-    write(fd, s, strlen(s));
+    ssize_t len = write(fd, s, strlen(s));
     close(fd);
+    if (len != (ssize_t)strlen(s)) {
+        perror("write failed");
+        exit(1);
+    }
 }
 
 static bool is_directory(const char *path) {
@@ -149,8 +153,10 @@ static void cleanup_invalid_ddcci_i2c(void) {
             continue;
 
         char buf[64] = {0};
-        fgets(buf, sizeof(buf), f);
+        char * res = fgets(buf, sizeof(buf), f);
         fclose(f);
+        if (!res)
+            continue;
 
         if (strncmp(buf, "ddcci", 5) == 0 &&
             !is_directory(driver)) {
@@ -423,7 +429,10 @@ loop:
     fds[0].events = POLLIN;
 
     if (argc > 1 && strcmp(argv[1], "--daemon") == 0) {
-        daemon(0, 1);
+        if (daemon(0, 1) != 0) {
+            msg("Failed to daemonize\n");
+            return 1;
+        }
     }
 
     for (;;) {
