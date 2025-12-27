@@ -382,7 +382,7 @@ static void handle_x_events(void* arg) {
 
 typedef void (*UniversalFunc)(void*);
 
-int main(void) {
+int main(int argc, char *argv[]) {
     const char *env_val = getenv("DDCCI_HOTPLUGD_LOG");
     if (env_val != NULL && strcmp(env_val, "0") == 0) {
         log_enabled = false;
@@ -421,6 +421,11 @@ int main(void) {
 
 loop:
     fds[0].events = POLLIN;
+
+    if (argc > 1 && strcmp(argv[1], "--daemon") == 0) {
+        daemon(0, 1);
+    }
+
     for (;;) {
         poll(fds, 1, -1);
         if (fds[0].revents & POLLIN)

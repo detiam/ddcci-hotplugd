@@ -9,11 +9,28 @@ LDFLAGS += \
 TARGET  = ddcci-hotplugd
 SRC     = src/*.c
 
+PREFIX        ?= /usr
+LIBEXECDIR    ?= $(PREFIX)/lib
+SYSTEMDUNITDIR?= $(PREFIX)/lib/systemd/system
+
 all: $(TARGET)
 
 $(TARGET): $(SRC)
 	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ $^ $(LDFLAGS)
 
+install: $(TARGET)
+	install -d $(DESTDIR)$(LIBEXECDIR)
+	install -m 0755 $(TARGET) \
+		$(DESTDIR)$(LIBEXECDIR)/$(TARGET)
+
+	install -d $(DESTDIR)$(SYSTEMDUNITDIR)
+	install -m 0644 systemd/$(TARGET).service \
+		$(DESTDIR)$(SYSTEMDUNITDIR)/$(TARGET).service
+
+uninstall:
+	rm -f \
+		$(DESTDIR)$(LIBEXECDIR)/$(TARGET) \
+		$(DESTDIR)$(SYSTEMDUNITDIR)/$(TARGET).service
 clean:
 	rm -f $(TARGET)
 

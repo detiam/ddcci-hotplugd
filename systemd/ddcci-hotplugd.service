@@ -1,0 +1,11 @@
+[Unit]
+Description = ddcci-driver-linux hotplug and auto detect, userspace workaround
+Before=display-manager.service shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=forking
+ExecStart = /usr/lib/ddcci-hotplugd --daemon
+
+[Install]
+WantedBy = graphical.target
