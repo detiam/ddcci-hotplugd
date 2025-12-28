@@ -1,5 +1,5 @@
 CC      ?= cc
-CFLAGS  += -std=c11 -Wall -Wextra -O2
+CFLAGS  += -D_FORTIFY_SOURCE=3 -std=c11 -Wall -Wextra -O2
 CPPFLAGS+= \
     $(shell pkg-config --cflags libudev x11 xrandr libkmod ddcutil xau)
 

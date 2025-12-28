@@ -332,26 +332,31 @@ static void handle_udev_event(void* arg) {
 
 static int rr_event_base = -1;
 
-static Display *setup_xrandr(int *xfd) {
+static Display *setup_xrandr(int *xfd, pid_t *xpid) {
     Display *dpy = XOpenDisplay(NULL);
     if (!dpy) {
-        if (geteuid() == 0) {
-            X11Env envs[1];
-            int found = fetch_x11_environments(envs, 1);
-            if (found > 0) {
-                msg("XRandR DISPLAY='%s' XAUTHORITY='%s'\n",
-                    envs[0].display, envs[0].xauthority);
-                setenv("DISPLAY", envs[0].display, 1);
-                setenv("XAUTHORITY", envs[0].xauthority, 1);
-                dpy = XOpenDisplay(NULL);
-                if (!dpy)
-                    return NULL;
-            } else {
+        X11Env env;
+        if (xpid) {
+            if (!fetch_x11_env_by_pid(&env, *xpid)) {
                 return NULL;
             }
         } else {
-            return NULL;
+            X11Env envs[4];
+            int n = fetch_x11_env(envs, 4);
+            if (n > 0) {
+                env = envs[0];
+            } else {
+                return NULL;
+            }
         }
+
+        setenv("DISPLAY", env.display, 1);
+        setenv("XAUTHORITY", env.xauthority, 1);
+        dpy = XOpenDisplay(NULL);
+        if (!dpy)
+            return NULL;
+        msg("XRandR DISPLAY='%s' XAUTHORITY='%s'\n",
+            env.display, env.xauthority);
     }
 
     int err;
@@ -393,29 +398,61 @@ static void handle_x_events(void* arg) {
 typedef void (*UniversalFunc)(void*);
 
 int main(int argc, char *argv[]) {
+    bool is_daemon = false;
+    bool only_xrandr = false;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--daemon") == 0) {
+            is_daemon = true;
+        } else if (strcmp(argv[i], "--xrandr") == 0) {
+            only_xrandr = true;
+        }
+    }
+
     const char *env_val = getenv("DDCCI_HOTPLUGD_LOG");
     if (env_val != NULL && strcmp(env_val, "0") == 0) {
         log_enabled = false;
     }
 
     if (geteuid() != 0) {
-        msg("Warning: This program need privileges to load kernel modules and access i2c devices.\n");
+        msg("This program requires root privileges\n");
+        return 1;
     }
 
     run_ddcci_attach();   /* initial */
+
+    if (is_daemon && daemon(0, 1) != 0) {
+        msg("Failed to daemonize\n");
+        return 1;
+    }
 
     struct pollfd fds[1];
     UniversalFunc events_handle = NULL;
     void* data = NULL;
 
     int xfd = -1;
-    Display *dpy = setup_xrandr(&xfd);
+    Display *dpy = setup_xrandr(&xfd, NULL);
+    if (!(xfd >= 0 && dpy) && only_xrandr) {
+        pid_t xpid = wait_x11_startup(NULL);
+        sleep(1); // FIXME: too lazy to thought out what is the exact time x11 startup, just wait a bit
+        if (xpid == 0) {
+            msg("Something went wrong while waiting for X11 startup\n");
+            return 1;
+        }
+        dpy = setup_xrandr(&xfd, &xpid);
+    }
+
     if (xfd >= 0 && dpy) {
         msg("Using XRandR for hotplug detection\n");
         fds[0].fd = xfd;
         events_handle = handle_x_events;
         data = dpy;
         goto loop;
+    }
+
+    if (only_xrandr) {
+        msg("Failed to setup XRandR for hotplug detection\n");
+        return 1;
     }
 
     struct udev *udev = NULL;
@@ -431,13 +468,6 @@ int main(int argc, char *argv[]) {
 
 loop:
     fds[0].events = POLLIN;
-
-    if (argc > 1 && strcmp(argv[1], "--daemon") == 0) {
-        if (daemon(0, 1) != 0) {
-            msg("Failed to daemonize\n");
-            return 1;
-        }
-    }
 
     for (;;) {
         poll(fds, 1, -1);

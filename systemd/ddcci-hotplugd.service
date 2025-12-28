@@ -6,6 +6,8 @@ Conflicts=shutdown.target
 [Service]
 Type=forking
 ExecStart = /usr/lib/ddcci-hotplugd --daemon
+Restart=on-failure
+RestartSec=5s
 
 [Install]
 WantedBy = graphical.target
