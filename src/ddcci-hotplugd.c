@@ -409,7 +409,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    const char *env_val = getenv("DDCCI_HOTPLUGD_LOG");
+    char *env_val = getenv("DDCCI_HOTPLUGD_XRANDR");
+    if (env_val != NULL && strcmp(env_val, "1") == 0) {
+        only_xrandr = true;
+    }
+
+    env_val = getenv("DDCCI_HOTPLUGD_LOG");
     if (env_val != NULL && strcmp(env_val, "0") == 0) {
         log_enabled = false;
     }
