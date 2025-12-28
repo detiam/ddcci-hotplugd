@@ -5,6 +5,7 @@ Conflicts=shutdown.target
 
 [Service]
 Type=forking
+EnvironmentFile = -/etc/ddcci-hotplugd.env
 ExecStart = /usr/lib/ddcci-hotplugd --daemon
 Restart=on-failure
 RestartSec=5s

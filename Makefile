@@ -23,6 +23,10 @@ install: $(TARGET)
 	install -m 0755 $(TARGET) \
 		$(DESTDIR)$(LIBEXECDIR)/$(TARGET)
 
+	install -d $(DESTDIR)/etc
+	install -m 0644 systemd/$(TARGET).env \
+		$(DESTDIR)/etc/$(TARGET).env
+
 	install -d $(DESTDIR)$(SYSTEMDUNITDIR)
 	install -m 0644 systemd/$(TARGET).service \
 		$(DESTDIR)$(SYSTEMDUNITDIR)/$(TARGET).service
